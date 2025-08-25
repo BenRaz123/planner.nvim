@@ -14,18 +14,11 @@ local PROG_NAME = DATADIR .. "/gcal"
 
 -- takes in DATE_FORMAT and returns date_t
 local function parse_date_format(ts)
+	local year, month, day = string.match(ts, "(%d+)-(%d+)-(%d+)")
 	local current_date = os.date("*t")
-	local y = 0
-	local m = 0
-	local d = 0
-	for year, month, day in string.gmatch(ts, "(%d+)-(%d+)-(%d+)") do
-		y = tonumber(year)
-		m = tonumber(month)
-		d = tonumber(day)
-	end
-	current_date.year = y
-	current_date.month = m
-	current_date.day = d
+	current_date.year = year
+	current_date.month = month
+	current_date.day = day
 
 	return current_date
 end
@@ -93,7 +86,8 @@ example
 --- @field raw string the unparsed data of this entry
 --- @field due integer epoch time of the due date
 --- @field summary string summary of event
---@field description string? an optional description of the event
+--- @field description string? an optional description of the event
+--- @field duration integer duration of the event in seconds
 local Entry = {}
 Entry.__index = Entry
 
@@ -120,7 +114,6 @@ end
 
 --- @return string[]
 local function splitn(str, delimiter, max_matches)
-	vim.print(str)
 	local result = {}
 	local start = 1
 	local num_matches = 0
@@ -174,16 +167,13 @@ end
 --- @param minute integer?
 --- @param am_pm_signifier string?
 local function hm_extend_dt(date, hour, minute, am_pm_signifier)
-	local ret = os.date("*t")
 	if hour ~= nil or minute ~= nil then
 		--- @cast hour integer
 		--- @cast minute integer
 		--- @cast am_pm_signifier string 
-		ret.hour = string.lower(am_pm_signifier) ~= 'a' and hour+12 or hour
-		ret.min = minute
+		date.hour = string.lower(am_pm_signifier) ~= 'a' and hour+12 or hour
+		date.min = minute
 	end
-	date.hour = ret.hour
-	date.min = ret.min
 end
 
 --- @param date osdate date of the entry
@@ -192,7 +182,7 @@ end
 function Entry.from_string(date, str)
 	--- @type osdate
 	local d = vim.deepcopy(date)
-	local s = trim(splitn(str, "- ", 2)[2])
+	local s = trim(string.gsub(str, "^- ", "", 1))
 
 	local entry = Entry.new()
 
@@ -204,15 +194,11 @@ function Entry.from_string(date, str)
 	local hour, minute, am_pm_distinguisher = string.match(s, HM_REGEX)
 	s = trim(string.gsub(s, HM_REGEX, "", 1))
 
-	if offset_number ~= nil then
-		local offset = offset_number * TDELTA_VALS[offset_type or "d"]
-		local due = add_delta(date, offset)
-		d = due
-	end
-
+	local offset = (offset_number or 1) * TDELTA_VALS[offset_type or "d"]
+	d = add_delta(d, offset)
 	hm_extend_dt(d, hour, minute, am_pm_distinguisher)
 
-	entry.due = os.time(date)
+	entry.due = os.time(d)
 
 	local CATEGORY_REGEX = ":(%w+):"
 	entry.category = string.match(s, CATEGORY_REGEX)
@@ -449,5 +435,14 @@ vim.api.nvim_create_user_command("PlnAddCredentials", function(args)
 end, { nargs = 1, complete = "file", desc = "Add a credentials.json file from Google Cloud Platform" })
 
 vim.api.nvim_create_user_command("PlnReset", function()
-	vim.fn.writefile({}, DATAFILE)
+	local handle = vim.uv.fs_scandir(DATADIR)
+	if not handle then 
+		vim.notify("couldn't get handle on directory " .. DATA_DIR, vim.log.levels.WARN)
+		return
+	end
+	while true do
+		local name, t = vim.uv.fs_scandir_next(handle)
+		if not name then break end
+		print(name)
+	end
 end, { desc = "Delete database file (can be found at " .. DATAFILE .. ")" })

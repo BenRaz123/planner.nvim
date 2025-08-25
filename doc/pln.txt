@@ -10,27 +10,37 @@ Quickstart                                                    *pln-quickstart*
 * Install gcal with |:PlnInstallGcal|
 * Run |:Pln|
 
-===============================================================================
-Commands                                                         *pln-commands*
+==============================================================================
+Commands                                                        *pln-commands*
 
-:Pln                                                                     *:Pln*
-Opens a new window with a list of the current planner entries, sorted by date.
-Each entry has the |pln-syntax|.
+:Pln                                                                    *:Pln*
+	Opens a new window with a list of the current planner entries, sorted by
+	date. Each entry must be written in |pln-syntax| for the program to
+	understand it.
 
-:PlnReset                                                           *:PlnReset*
-Deletes all planner data. Not reversible.
+:PlnReset                                                          *:PlnReset*
+	Deletes all data inside of the data directory. To get back the gcal
+	program and credentials file needed for the Google Calendar integration to
+	run, see |:PlnInstallGcal| and |:PlnAddCredentials|
+	Note:
+	The planner is deleted without a backup so if you want a backup you need
+	to make one
 
-:PlnInstallGcal                                               *:PlnInstallGcal*
-Performs the following steps: >bash
-	$ git clone https://github.com/benraz123/gcal-py
-	$ cd gcal-py
-	$ make build
-	$ cp dist/gcal <DATA DIR>
-	$ cd ..
-	$ rm -rf gcal-py
+:PlnInstallGcal                                              *:PlnInstallGcal*
+	Essentially performs the following steps: >bash
+		$ git clone https://github.com/benraz123/gcal-py
+		$ cd gcal-py
+		$ make build
+		$ cp dist/gcal <DATA DIR>
+		$ cd ..
+		$ rm -rf gcal-py
 
-===============================================================================
-Syntax                                                             *pln-syntax*
+:PlnAddCredentials {file}                                 *:PlnAddCredentials*
+	Loads the {file} into the data directory for the program to read from.
+	Essentially does the same as `cp` {file} `<DATA DIR>/credentials.json
+	
+==============================================================================
+Syntax                                                            *pln-syntax*
 
 Each entry must start with a dash (`- `)
 
@@ -42,8 +52,18 @@ Time: ~
 	`{x}:{y}[pm|am]` Is the format. Pm is the default if am is not specified.
 	default: current time
 
+Description Of Event: ~
+	`: <description><eol>` is the format for descriptions. It must be at the
+	end of the line 
+
+Duration: ~
+	`<space>{x}{m|h}` matches the first occurence of this pattern. Default:
+	30m
+
 Category: ~
-	`:category:` required
-                                                           *pln-syntax-example*
+	`:category:` category. not required
+                                                          *pln-syntax-example*
 Example: ~
 	`- +1w 6:30pm :science: Do Work`
+
+vim:tw=78:ft=help:norl:

@@ -1,0 +1,49 @@
+==============================================================================
+*pln.txt*	
+
+An easy to use planner for neovim
+
+==============================================================================
+Quickstart                                                    *pln-quickstart*
+
+* Copy over the credentials file with |:PlnAddCredentials|
+* Install gcal with |:PlnInstallGcal|
+* Run |:Pln|
+
+===============================================================================
+Commands                                                         *pln-commands*
+
+:Pln                                                                     *:Pln*
+Opens a new window with a list of the current planner entries, sorted by date.
+Each entry has the |pln-syntax|.
+
+:PlnReset                                                           *:PlnReset*
+Deletes all planner data. Not reversible.
+
+:PlnInstallGcal                                               *:PlnInstallGcal*
+Performs the following steps: >bash
+	$ git clone https://github.com/benraz123/gcal-py
+	$ cd gcal-py
+	$ make build
+	$ cp dist/gcal <DATA DIR>
+	$ cd ..
+	$ rm -rf gcal-py
+
+===============================================================================
+Syntax                                                             *pln-syntax*
+
+Each entry must start with a dash (`- `)
+
+Specifying Date Offsets: ~
+	`+{x}{d|w}` Is the format. `d` means day and `w` means week.
+	default: `+1d`
+
+Time: ~
+	`{x}:{y}[pm|am]` Is the format. Pm is the default if am is not specified.
+	default: current time
+
+Category: ~
+	`:category:` required
+                                                           *pln-syntax-example*
+Example: ~
+	`- +1w 6:30pm :science: Do Work`

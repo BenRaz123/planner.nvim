@@ -426,6 +426,7 @@ end
 vim.api.nvim_create_user_command("Pln", run, { desc = "Run the planner" })
 
 vim.api.nvim_create_user_command("PlnAddCredentials", function(args)
+	print(args.nargs)
 	if args.nargs ~= 1 then
 		print("Error: Need only one argument")
 		return

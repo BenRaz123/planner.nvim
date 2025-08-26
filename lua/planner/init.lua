@@ -1,11 +1,4 @@
-if vim.g.loaded_planner == 1 then
-	return
-end
-
-vim.g.loaded_planner = 1
-
 local uv = vim.uv
-
 
 local GCAL_REPO = "https://github.com/benraz123/gcal-py"
 local DATADIR = vim.fn.stdpath("data") .. "/planner"

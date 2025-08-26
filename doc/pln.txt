@@ -6,10 +6,36 @@ An easy to use planner for neovim
 ==============================================================================
 Quickstart                                                    *pln-quickstart*
 
-* Copy over the credentials file with |:PlnAddCredentials|
-* Install gcal with |:PlnInstallGcal|
-* Run |:Pln|
+                                                                   *pln-oauth*
+Oauth: ~
+	In order to use planner with the Google Calendar feature, you need to get
+	a key for the Google Calendar API. Go to the Google cloud console and
+	follow this guide: https://developers.google.com/workspace/calendar/api/quickstart/python#set-up-environment
+	
+	* Select the `External` app type and add your email address to the test
+	  users.
+	* Under the `Google Auth Platform / Data Access` add the scope
+	  `https://www.googleapis.com/auth/calendar` and save.
+	* Generate the client json and download it. Remember the file location
+	  because you will use it for setup with |pln-quick| or |pln-manual|
+                                                                   *pln-quick*
+Quickest: ~
+>lua
+	vim.pack.add {
+		"https://github.com/benraz123/",
+		-- other plugins
+	}
 
+	require "planner".setup("/path/to/oauth/credentials/file")
+<
+                                                                  *pln-manual*
+Manual: ~
+	Note: |pln-quick| is the idiomatic solution but it does the same thing as
+	this process
+	>vim
+	:PlnLoadCredentials {credential path}
+	:PlnInstallGcal
+>
 ==============================================================================
 Commands                                                        *pln-commands*
 

@@ -551,13 +551,11 @@ M.reset = function()
 	end
 end
 M.setup = function(cred_file)
-	if vim.g.planner_init == 1 then
-		return
+	if not file_exists(CREDENTIALS_FILE) then
+		add_credentials(cred_file)
 	end
-
-	vim.g.planner_init = 1
-	vim.notify("initializing planner plugin", vim.log.levels.INFO)
-	add_credentials(cred_file)
-	M.install_gcal()
+	if not file_exists(GCAL_BIN_PATH) then
+		M.install_gcal()
+	end
 end
 return M

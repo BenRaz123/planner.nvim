@@ -361,7 +361,6 @@ local function add_credentials(file_name)
 end
 
 local M = {}
-local initialized = false
 M.run = function()
 	if not file_exists(CREDENTIALS_FILE) then
 		vim.notify("no credential file found. to create one, see :PlnAddCredentials", vim.log.levels.ERROR)
@@ -552,9 +551,12 @@ M.reset = function()
 	end
 end
 M.setup = function(cred_file)
+	if vim.g.planner_init == 1 then
+		return
+	end
+
+	vim.g.planner_init = 1
 	vim.notify("initializing planner plugin", vim.log.levels.INFO)
-	if initialized then return end
-	initialized = true
 	add_credentials(cred_file)
 	M.install_gcal()
 end

@@ -1,9 +1,10 @@
+--[[
 if vim.g.loaded_planner == 1 then
 	return
 end
 
 vim.g.loaded_planner = 1
-
+--]]
 local pln = require("planner")
 
 vim.api.nvim_create_user_command("Pln", pln.run, {})

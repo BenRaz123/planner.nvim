@@ -10,6 +10,32 @@ local TOKEN_FILE = DATADIR .. "/google_calendar_token.json"
 local DATE_FORMAT = "%Y-%m-%d"
 local GCAL_BIN_PATH = DATADIR .. "/gcal"
 
+local WARN = vim.log.levels.WARN
+local ERROR = vim.log.levels.ERROR
+local INFO = vim.log.levels.INFO
+
+--- @param level vim.log.levels
+--- @param fmt string
+local function log(level, fmt, ...)
+	local var_arg = { ... }
+	vim.schedule(function()
+		vim.notify(string.format(fmt, unpack(var_arg)), level)
+	end)
+end
+
+--- @generic T
+--- @param l T[]?
+--- @param it T
+local function append(l, it)
+	if l ~= nil then
+		table.insert(l, it)
+	else
+		log(WARN, "appending %s to empty list: %s", l, it)
+		l = {it}
+	end
+end
+
+
 --- Parses DATE_FORMAT
 --- @param ts string
 --- @return osdate
@@ -43,11 +69,38 @@ local function file_exists(filepath)
 	end
 end
 
+
+--- @class Entry
+--- @field gcal_id string? the google calendar id for this item. It was added to a google calendar if it ~= nil
+--- @field category string the category this entry fits into
+--- @field raw string the unparsed data of this entry
+--- @field due integer epoch time of the due date
+--- @field summary string summary of event
+--- @field description string? an optional description of the event
+--- @field duration integer? duration of the event in seconds
+
+--- @param entries_table table<string, Entry[]>
+--- @return string[]
+local function keys(entries_table)
+	local ret = {}
+	for key in pairs(entries_table) do
+		append(ret, key)
+	end
+	table.sort(ret, function(a, b) return a > b end)
+	return ret
+end
+
+--- @class State
+--- @field list table<string, Entry[]>
+--- @field cursor integer
+
 --- @param f string file to open. needs to be json
 --- @return State
 local function parse_from_file(f)
 	local default = { list = {}, cursor = 1 }
-	if not file_exists(f) then return default end
+	if not file_exists(f) then
+		return default
+	end
 	local rawText = table.concat(vim.fn.readfile(f), "\n")
 	if rawText == nil or rawText == "" then return default end
 	local ok, decoded = pcall(vim.json.decode, rawText)
@@ -56,35 +109,15 @@ local function parse_from_file(f)
 	end
 	return { list = decoded, cursor = 1 }
 end
-
---- @class Entry
---- @field category string the category this entry fits into
---- @field raw string the unparsed data of this entry
---- @field due integer epoch time of the due date
---- @field summary string summary of event
---- @field description string? an optional description of the event
---- @field duration integer? duration of the event in seconds
-local Entry = {}
-Entry.__index = Entry
-
---- @return Entry
-function Entry.new()
-	local ret = {}
-	setmetatable(ret, Entry)
-	return ret
+--- @param st State
+local function state_current_date(st)
+	return keys(st.list)[st.cursor]
 end
-
---- @class State
---- @field list table<string, Entry[]>
---- @field cursor integer
-local State = {}
-State.__index = State
 
 --- @param f string file to use as db
 --- @return State
-function State.new(f)
+local function state_new(f)
 	local ret = parse_from_file(f)
-	setmetatable(ret, State)
 	return ret
 end
 
@@ -101,17 +134,17 @@ local function splitn(str, delimiter, max_matches)
 	while true do
 		if max_matches and num_matches >= max_matches - 1 then
 			-- For the last requested match, return the rest of the string.
-			table.insert(result, string.sub(str, start))
+			append(result, string.sub(str, start))
 			break
 		end
 
 		local split_start, split_end = string.find(str, delimiter, start, true)
 		if not split_start then
-			table.insert(result, string.sub(str, start))
+			append(result, string.sub(str, start))
 			break
 		end
 
-		table.insert(result, string.sub(str, start, split_start - 1))
+		append(result, string.sub(str, start, split_start - 1))
 		start = split_end + 1
 		num_matches = num_matches + 1
 	end
@@ -126,10 +159,6 @@ local TDELTA_VALS = {
 	m = 60,
 	s = 1,
 }
-
-local function trim(s)
-	return string.gsub(s, "^%s*(.-)%s*$", "%1")
-end
 
 --- @param date osdate
 --- @param hour integer?
@@ -148,20 +177,20 @@ end
 --- @param date osdate date of the entry
 --- @param str string to parse
 --- @return Entry
-function Entry.from_string(date, str)
+local function entry_from_string(date, str)
 	--- @type osdate
 	local d = vim.deepcopy(date)
-	local s = trim(string.gsub(str, "^- ", "", 1))
+	local s = vim.trim(string.gsub(str, "^- ", "", 1))
 
-	local entry = Entry.new()
+	local entry = {}
 
 	local OFFSET_REGEX = "+(%d+)([dw])"
 	local offset_number, offset_type = string.match(s, OFFSET_REGEX)
-	s = trim(string.gsub(s, OFFSET_REGEX, "", 1))
+	s = vim.trim(string.gsub(s, OFFSET_REGEX, "", 1))
 
 	local HM_REGEX = "(%d+):(%d+)([apAP]?)[mM]?"
 	local hour, minute, am_pm_distinguisher = string.match(s, HM_REGEX)
-	s = trim(string.gsub(s, HM_REGEX, "", 1))
+	s = vim.trim(string.gsub(s, HM_REGEX, "", 1))
 
 	local offset = (offset_number or 1) * TDELTA_VALS[offset_type or "d"]
 	d = add_delta(d, offset)
@@ -171,27 +200,27 @@ function Entry.from_string(date, str)
 
 	local CATEGORY_REGEX = ":(%w+):"
 	entry.category = string.match(s, CATEGORY_REGEX)
-	s = trim(string.gsub(s, CATEGORY_REGEX, "", 1))
+	s = vim.trim(string.gsub(s, CATEGORY_REGEX, "", 1))
 
 	local DESCRIPTION_REGEX = ": ?([^:]*)$"
 	local descr = string.match(s, DESCRIPTION_REGEX)
 	if descr ~= nil then
 		entry.description = descr
-		s = trim(string.gsub(s, DESCRIPTION_REGEX, "", 1))
+		s = vim.trim(string.gsub(s, DESCRIPTION_REGEX, "", 1))
 	end
 
 	local DURATION_REGEX_1 = "(%d+)h(%d+)m"
 	local duration_hours, duration_minutes = string.match(s, DURATION_REGEX_1)
 
 	if duration_hours ~= nil and duration_minutes ~= nil then
-		s = trim(string.gsub(s, DURATION_REGEX_1, "", 1))
+		s = vim.trim(string.gsub(s, DURATION_REGEX_1, "", 1))
 		entry.duration = tonumber(duration_minutes) * TDELTA_VALS.m + tonumber(duration_hours) * TDELTA_VALS.h
 	else
 		local DURATION_REGEX_2 = "(%d+)([hm])"
 		local duration_multiplier, duration_type = string.match(s, DURATION_REGEX_2)
 		if duration_multiplier ~= nil and duration_type ~= nil then
 			entry.duration = tonumber(duration_multiplier) * TDELTA_VALS[duration_type]
-			s = trim(string.gsub(s, DURATION_REGEX_2, "", 1))
+			s = vim.trim(string.gsub(s, DURATION_REGEX_2, "", 1))
 		end
 	end
 
@@ -201,13 +230,13 @@ function Entry.from_string(date, str)
 	return entry
 end
 
---- @param ev Entry
-local function add_to_cal(ev)
+--- @param ent Entry
+local function add_to_cal(ent)
 	local title_case = function(str)
 		local res = {}
 		for _, word in ipairs(splitn(str, " ")) do
 			if #word < 1 then goto continue end
-			table.insert(res, string.upper(string.sub(word, 1, 1)) .. string.sub(word, 2))
+			append(res, string.upper(string.sub(word, 1, 1)) .. string.sub(word, 2))
 			::continue::
 		end
 		return table.concat(res, " ")
@@ -216,112 +245,225 @@ local function add_to_cal(ev)
 		GCAL_BIN_PATH,
 		"--credentials-file", CREDENTIALS_FILE,
 		"--token-file", TOKEN_FILE,
-		"--summary", (ev.category and (title_case(ev.category) .. ": ") or "") .. title_case(ev.summary),
-		"--description", ((ev.description ~= nil) and (ev.description .. " ") or "") ..
+		"create",
+		"--summary", (ent.category and (title_case(ent.category) .. ": ") or "") .. title_case(ent.summary),
+		"--description", ((ent.description ~= nil) and (ent.description .. " ") or "") ..
 	"[Automatically generated by vim pln]",
-		"--start-time", ev.due,
+		"--start-time", ent.due,
 		"--time-zone", os.getenv("TZ") or "Etc/UTC"
 	}
 
-	if ev.duration ~= nil then
-		table.insert(command, "--end-time")
-		table.insert(command, ev.due + ev.duration)
+	if ent.duration ~= nil then
+		append(command, "--end-time")
+		append(command, ent.due + ent.duration)
 	end
+
+	local status = vim.system(command):wait()
+	if status.code ~= 0 then
+		vim.notify(
+			string.format("failed to upload calendar event (command %s failed with code %d): %s", GCAL_BIN_PATH,
+				status.code, status.stderr), vim.log.levels.ERROR)
+	else
+		ent.gcal_id = vim.trim(status.stdout)
+	end
+end
+
+--- @param ent Entry
+local function remove_from_cal(ent)
+	vim.print("NTRY: ", ent)
+	if ent.gcal_id == nil then return end
+	local command = {
+		GCAL_BIN_PATH,
+		"--credentials-file", CREDENTIALS_FILE,
+		"--token-file", TOKEN_FILE,
+		"delete", ent.gcal_id
+	}
 
 	vim.system(command, function(status)
 		if status.code ~= 0 then
 			vim.schedule(function()
 				vim.notify(
-					string.format("failed to upload calendar event (command %s failed with code %d): %s", GCAL_BIN_PATH,
+					string.format("failed to delete calendar event (command %s failed with code %d): %s", GCAL_BIN_PATH,
 						status.code, status.stderr), vim.log.levels.ERROR)
 			end)
 		end
 	end)
 end
 
--- parses in the format
--- - +1d 9:30pm science do homework
---- @param date osdate
---- @param str string[]
-function State:add_markup(date, str)
-	local new_entries = {}
-	local formatted_date = os.date(DATE_FORMAT, os.time(date))
-	local old_list = vim.deepcopy(self.list)
-	self.list[formatted_date] = {}
-	for _, line in ipairs(str) do
-		if line == "" then goto continue end
-		local entry = Entry.from_string(date, line)
-		local unique = true
-		if old_list == nil or old_list[formatted_date] == nil then goto skip_unique end
-		for _, v in ipairs(old_list[formatted_date]) do
-			if v.raw == entry.raw then
-				unique = false
-				break
-			end
+--- @param list Entry[]
+--- @param item Entry
+--- @return Entry?
+--- returns true if the list has the item (one of the list's items matches the other ite's raw field)
+local function contains(list, item)
+	for _, entry in ipairs(list) do
+		if entry.raw == item.raw then
+			return entry
 		end
-		::skip_unique::
-		if unique then table.insert(new_entries, entry) end
-		table.insert(self.list[formatted_date], entry)
-		::continue::
 	end
-	for _, ent in ipairs(new_entries) do
-		add_to_cal(ent)
+	return nil
+end
+
+--- @generic T
+--- @generic U
+--- @param list T[]
+--- @param f fun(x: T): U?
+--- @return U[]
+local function collect(list, f)
+	local ret = {}
+	for _, item in ipairs(list) do
+		local ret_val = f(item)
+		if ret_val ~= nil then append(ret, ret_val) end
+	end
+	return ret
+end
+
+--- @generic T
+--- @param list T[]
+--- @param f fun(x: T)
+local function for_each(list, f)
+	if list == nil then return end
+	for _, item in ipairs(list) do
+		f(item)
+	end
+end
+
+--- @param old Entry[]
+--- @param buf Entry[]
+--- @return Entry[]
+local function intersection(old, buf)
+	--- @type Entry[]
+	local ret = {}
+	for _, buf_ent in ipairs(buf) do
+		local has, ent = contains(old, buf_ent)
+		if has then
+			append(ret, ent)
+		end
+	end
+	return ret
+end
+
+--- @param old Entry[]
+--- @param buf Entry[]
+--- @return Entry[]
+local function to_delete(old, buf)
+	--- @type Entry[]
+	local ret = {}
+	for _, old_ent in ipairs(old) do
+		local has, _ = contains(buf, old_ent)
+		if not has then
+			append(ret, old_ent)
+		end
+	end
+	return ret
+end
+
+--- @param old Entry[]
+--- @param buf Entry[]
+--- @return Entry[]
+local function new_entries(old, buf)
+	--- @type Entry[]
+	local ret = {}
+	for _, buf_ent in ipairs(buf) do
+		local has, _ = contains(old, buf_ent)
+		if not has then
+			append(ret, has)
+		end
+	end
+	return ret
+end
+
+--- @param st State
+--- @param date osdate
+--- @param lines string[]
+local function add_markup(st, date, lines)
+	local formatted_date = os.date(DATE_FORMAT, os.time(date))
+	--- @cast formatted_date string
+
+	st.list[formatted_date] = st.list[formatted_date] or {}
+	local old = vim.deepcopy(st.list[formatted_date]) or {}
+	st.list[formatted_date] = {}
+	for_each(old, function(ent)
+		if ent.gcal_id == nil then
+			log(WARN, "entry without gcal id: %s", ent.summary)
+		end
+	end)
+
+	local buf = collect(lines, function(line)
+		if vim.trim(line) ~= "" then
+			return entry_from_string(date, line)
+		end
+	end)
+
+	local delete = to_delete(old, buf)
+	for_each(delete, function(ent) remove_from_cal(ent) end)
+
+	for _, buf_item in ipairs(buf) do
+		local old_item = contains(old, buf_item)
+		if old_item ~= nil then
+			log(INFO, "item has old equiv: %s", old_item)
+			append(st.list[formatted_date], old_item)
+		else
+			log(INFO, "new item: %s", buf_item.summary)
+			add_to_cal(buf_item)
+			append(st.list[formatted_date], buf_item)
+		end
 	end
 end
 
 --- @return integer
-function State:len()
+--- @param st State
+local function state_len(st)
 	local len = 0
-	for _, _ in pairs(self.list) do
+	for _, _ in pairs(st.list) do
 		len = len + 1
 	end
 	return len
 end
 
+--- @param st State
 --- @param i integer
-function State:index(i)
-	local index = 1
-	for k, _ in pairs(self.list) do
-		if i == index then return k end
-		index = index + 1
-	end
+--- @return Entry[]
+local function state_index(st, i)
+	return st.list[keys(st.list)[i]]
 end
 
-function State:next()
-	if self.cursor == self:len() then
-		self.cursor = 1
+--- @param st State
+local function state_next(st)
+	if st.cursor == state_len(st) then
+		st.cursor = 1
 		return
 	end
-	self.cursor = self.cursor + 1
+	st.cursor = st.cursor + 1
 end
 
-function State:prev()
-	if self.cursor == 1 then
-		self.cursor = self:len()
+--- @param st State
+local function state_prev(st)
+	if st.cursor == 1 then
+		st.cursor = state_len(st)
 		return
 	end
-	self.cursor = self.cursor - 1
+	st.cursor = st.cursor - 1
 end
 
+--- @param st State
 --- @return string[]
-function State:display()
+local function state_display(st)
 	local ret = { "Press `c` to create a new entry. Press `q` to quit", "" }
-	if not self.list or self:len() == 0 then return ret end
-	local idx = 1
-	for date, _ in pairs(self.list) do
-		if idx == self.cursor then
-			table.insert(ret, "> " .. date)
+	if not st.list or state_len(st) == 0 then return ret end
+	for idx, key in ipairs(keys(st.list)) do
+		if idx == st.cursor then
+			append(ret, "> " .. key)
 		else
-			table.insert(ret, "- " .. date)
+			append(ret, "- " .. key)
 		end
-		idx = idx + 1
 	end
 	return ret
 end
 
+--- @param st State
 --- @param f string
-function State:store(f)
-	vim.fn.writefile(splitn(vim.json.encode(self.list), "\n"), f)
+local function state_store(st, f)
+	vim.fn.writefile(splitn(vim.json.encode(st.list), "\n"), f)
 end
 
 local function setb(buf, opt)
@@ -371,10 +513,11 @@ M.run = function()
 		vim.fn.mkdir(DATADIR, "p")
 	end
 
-	local st = State.new(DATAFILE)
+	local st = state_new(DATAFILE)
 	local buf = vim.api.nvim_create_buf(false, true)
 	local win = vim.api.nvim_open_win(buf, true, { split = "left" })
 
+	--- @param date string
 	local function runBuf(date)
 		vim.cmd [[enew]]
 
@@ -407,7 +550,7 @@ M.run = function()
 		if st.list[date] ~= nil then
 			print("Editing " .. date)
 			local lines = {}
-			for _, ent in ipairs(st.list[date]) do table.insert(lines, ent.raw) end
+			for _, ent in ipairs(st.list[date]) do append(lines, ent.raw) end
 			vim.api.nvim_buf_set_lines(ed_buf, 0, -1, false, lines)
 		else
 			print("Editing " .. date .. " [new]")
@@ -424,8 +567,9 @@ M.run = function()
 			buffer = ed_buf,
 			callback = function(ev)
 				local lines = vim.api.nvim_buf_get_lines(ev.buf, 0, -1, false)
-				st:add_markup(parse_date_format(date), lines)
-				st:store(DATAFILE)
+				add_markup(st, parse_date_format(date), lines)
+				vim.print(st)
+				state_store(st, DATAFILE)
 				vim.bo[ev.buf].modified = false
 				vim.api.nvim_win_close(win, true)
 				M.run()
@@ -451,27 +595,28 @@ M.run = function()
 
 	local update = function()
 		setb(buf, { modifiable = true })
-		vim.api.nvim_buf_set_lines(buf, 0, -1, false, st:display())
+		vim.api.nvim_buf_set_lines(buf, 0, -1, false, state_display(st))
 		setb(buf, { modifiable = false })
 	end
 
 	buf_keymap_set(buf, "n", { "c" }, function()
 		local date = os.date(DATE_FORMAT)
+		--- @cast date string
 		runBuf(date)
 	end)
 
 	buf_keymap_set(buf, "n", { "j", "l", "<Right>", "<Down>" }, function()
-		st:next()
+		state_next(st)
 		update()
 	end)
 
 	buf_keymap_set(buf, "n", { "k", "h", "<Left>", "<Up>", "<BS>" }, function()
-		st:prev()
+		state_prev(st)
 		update()
 	end)
 
 	buf_keymap_set(buf, "n", { "<Enter>" }, function()
-		runBuf(st:index(st.cursor))
+		runBuf(state_current_date(st))
 	end)
 
 	buf_keymap_set(buf, "n", { "q" }, function()
@@ -531,6 +676,7 @@ M.install_gcal = function()
 		end)
 	end)
 end
+
 M.add_credentials = function(args)
 	if args.nargs ~= "1" then
 		vim.notify("need only one argument", vim.log.levels.ERROR)

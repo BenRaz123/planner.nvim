@@ -43,7 +43,6 @@ end
 --- @return string[]
 M.keys = function(st)
 	local ret = {}
-	vim.print(st)
 	if st.list ~= nil then
 		for key in pairs(st.list) do
 			util.append(ret, key)

@@ -66,7 +66,6 @@ M.run = function()
 	end
 
 	local st = state.new(conf.DATAFILE)
-	vim.print(st)
 	local buf = vim.api.nvim_create_buf(false, true)
 	local win = vim.api.nvim_open_win(buf, true, { split = "left" })
 
@@ -123,7 +122,6 @@ M.run = function()
 			callback = function(ev)
 				local lines = vim.api.nvim_buf_get_lines(ev.buf, 0, -1, false)
 				state.add_markup(st, parse_date_format(date), lines)
-				vim.print(st)
 				state.store(st, conf.DATAFILE)
 				vim.bo[ev.buf].modified = false
 				vim.api.nvim_win_close(win, true)

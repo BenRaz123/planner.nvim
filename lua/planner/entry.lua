@@ -146,7 +146,7 @@ M.from_string = function(date, str)
 	local hour, minute, am_pm_distinguisher = string.match(s, HM_REGEX)
 	s = vim.trim(string.gsub(s, HM_REGEX, "", 1))
 
-	local offset = (offset_number or 1) * TDELTA_VALS[offset_type or "d"]
+	local offset = (offset_number or 0) * TDELTA_VALS[offset_type or "d"]
 	d = util.add_delta(d, offset)
 	util.hm_extend_dt(d, hour, minute, am_pm_distinguisher)
 

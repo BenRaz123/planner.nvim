@@ -190,6 +190,7 @@ M.install_gcal = function()
 	local log_error = function(fmt, ...)
 		local var_arg = { ... }
 		vim.schedule(function()
+			---@diagnostic disable-next-line: deprecated
 			vim.notify("PlnInstallGcal: " .. string.format(fmt, unpack(var_arg)), vim.log.levels.ERROR)
 		end)
 		cleanup()

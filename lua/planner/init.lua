@@ -6,6 +6,9 @@ local uv = vim.uv
 
 local M = {}
 
+--- @type StateCallback?
+local Callback = nil
+
 --- Parses DATE_FORMAT
 --- @param ts string
 --- @return osdate
@@ -65,7 +68,7 @@ M.run = function()
 		vim.fn.mkdir(conf.DATADIR, "p")
 	end
 
-	local st = state.new(conf.DATAFILE)
+	local st = state.new(conf.DATAFILE, Callback)
 	local buf = vim.api.nvim_create_buf(false, true)
 	local win = vim.api.nvim_open_win(buf, true, { split = "left" })
 
@@ -252,12 +255,15 @@ M.reset = function()
 	end
 end
 
-M.setup = function(cred_file)
+--- @param cred_file string
+--- @param callback StateCallback?
+M.setup = function(cred_file, callback)
 	if not util.file_exists(conf.CREDENTIALS_FILE) then
 		add_credentials(cred_file)
 	end
 	if not util.file_exists(conf.GCAL_BIN_PATH) then
 		M.install_gcal()
 	end
+	Callback = callback
 end
 return M

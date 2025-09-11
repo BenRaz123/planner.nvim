@@ -19,9 +19,12 @@ local function to_delete(old, buf)
 	return ret
 end
 
+--- @alias StateCallback fun(date: osdate, list: Entry[])
+
 --- @class State
 --- @field list table<string, Entry[]>
 --- @field cursor integer
+--- @field cb StateCallback?
 
 --- @param f string file to open. needs to be json
 --- @return State
@@ -58,9 +61,11 @@ M.current_date = function(st)
 end
 
 --- @param f string file to use as db
+--- @param cb StateCallback? callback to call on entries
 --- @return State
-M.new = function(f)
+M.new = function(f, cb)
 	local ret = M.parse_from_file(f)
+	ret.cb=cb
 	return ret
 end
 
@@ -88,6 +93,10 @@ M.add_markup = function(st, date, lines)
 
 	local delete = to_delete(old, buf)
 	util.for_each(delete, function(ent) entry.remove_from_cal(ent) end)
+
+	if st.cb ~= nil then
+		st.cb(date, buf)
+	end
 
 	for _, buf_item in ipairs(buf) do
 		local old_item = entry.contains(old, buf_item)
